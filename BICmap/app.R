@@ -7,45 +7,71 @@ library(tidyverse)
 library(leaflet)
 library(htmltools)
 library(sf)
+library(bcmaps)
+
+dat_path <- "C:/Users/jeff.matheson/OneDrive/Documents/Spatial data library"
+
+# Bowen boundary
+# Comes in bc albers.Lidar data is in UTM Xone 10.
+munis <- bcmaps::municipalities()
+bowen <- filter(munis, ADMIN_AREA_ABBREVIATION == "Bowen Island") %>% 
+  st_transform(crs = 4326) %>% as_Spatial()
+
+# Create basemap
+
+basemap <- leaflet(options = leafletOptions(minZoom = 5, maxZoom = 30)) %>% 
+  addTiles(group = "OSM (default)")  %>%   
+  addProviderTiles(providers$Esri.WorldStreetMap, group = "Street Map") %>%    
+  addProviderTiles(providers$Wikimedia, group = "Wikimedia") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery") %>%
+  # Layers control
+  addLayersControl(
+    baseGroups = c("OSM (default)", "Street Map", "Wikimedia", "Imagery"),
+#      overlayGroups = c("Point Count Locations","Detections"),
+    options = layersControlOptions(collapsed = TRUE)) %>% 
+  # Add measurement tool
+  addMeasure(primaryLengthUnit = "metres",
+             primaryAreaUnit = "hectares") %>% 
+  addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,
+             opacity = 0.8, fillOpacity = 0, data = bowen, 
+             group = "Boundaries") 
+basemap
 
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
-
-    # Application title
-    titlePanel("Old Faithful Geyser Data"),
-
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-            sliderInput("bins",
-                        "Number of bins:",
-                        min = 1,
-                        max = 50,
-                        value = 30)
-        ),
-
-        # Show a plot of the generated distribution
-        mainPanel(
-           plotOutput("distPlot")
-        )
+  
+  # Set theme
+  theme = shinytheme("flatly"),
+  
+  # App title
+  titlePanel("Bowen Island Conservancy - BICmap"),
+  
+  # Sidebar layout with input and output definitions
+  sidebarLayout(
+    
+    sidebarPanel(
+      
+      p ("Spatial layers relevant to biodiversity conservation on Bowen Island"),
+      hr(),
+      hr(),
+    ),
+    
+    # Main panel for displaying outputs
+    mainPanel(
+      leafletOutput("mymap", width = "100%", height = "600px")
     )
-)
+    )
+  )
 
-# Define server logic required to draw a histogram
 server <- function(input, output) {
 
-    output$distPlot <- renderPlot({
-        # generate bins based on input$bins from ui.R
-        x    <- faithful[, 2]
-        bins <- seq(min(x), max(x), length.out = input$bins + 1)
-
-        # draw the histogram with the specified number of bins
-        hist(x, breaks = bins, col = 'darkgray', border = 'white',
-             xlab = 'Waiting time to next eruption (in mins)',
-             main = 'Histogram of waiting times')
+  # Create Map    
+  output$mymap <- renderLeaflet({
+    basemap
     })
 }
+
 
 # Run the application 
 shinyApp(ui = ui, server = server)
