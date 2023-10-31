@@ -1,2 +1,3 @@
-# BIC-map
-Bowen Island Conservancy Mapping App
+# Bowen Island Mapping 
+
+Include a Bowen Island Conservancy Mapping App (BICmap) currently under development.
