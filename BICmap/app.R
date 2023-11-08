@@ -17,6 +17,9 @@ munis <- bcmaps::municipalities()
 bowen <- filter(munis, ADMIN_AREA_ABBREVIATION == "Bowen Island") %>% 
   st_transform(crs = 4326) %>% as_Spatial()
 
+parcels <- st_read(paste0(dat_path, "/Bowen_base/Parcels/parcels_bowen.shp"))
+
+
 # Create basemap
 
 basemap <- leaflet(options = leafletOptions(minZoom = 5, maxZoom = 30)) %>% 

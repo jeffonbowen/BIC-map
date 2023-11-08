@@ -16,7 +16,6 @@ tm_shape(bowen) +
   tm_lines()
 #  st_transform(crs = 4326) %>% as_Spatial()
 
-
 # SEI ---------------------------------------------------------------------
 
 dat_path <- "C:/Users/jeff.matheson/OneDrive/Documents/Spatial data library"
@@ -37,7 +36,7 @@ sum(SEI$utmstarea)/10000
 sum(SEI$wsize_se1)/10000
 
 
-## TEM data from IT
+# TEM data from IT --------------------------------------------------------
 dat_path <- "C:/Users/jeff.matheson/OneDrive/Documents/Spatial data library"
 ITEM <- st_read(paste0(dat_path, "/Ecosystems/ITEM/Bowen_ITEM.shp"))
 st_crs(ITEM) <- 4326
@@ -46,9 +45,7 @@ tm_shape(ITEM) +
   tm_polygons()
 
 
-
-
-## Get Parcel Data
+# Get Parcel Data ---------------------------------------------------------
 
 bcdata::bcdc_browse("4cf233c2-f020-4f7a-9b87-1923252fbc24")
 bcdc_search("4cf233c2-f020-4f7a-9b87-1923252fbc24")
