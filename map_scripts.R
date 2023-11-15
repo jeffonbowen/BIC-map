@@ -58,14 +58,16 @@ plot(parcels)
 parcels <-st_transform(parcels, crs = 26910)
 # Tmap does not like the following field:
 parcels <- select(parcels, !SE_ANNO_CAD_DATA)
-parcels <- filter(parcels, !SE_ANNO_CAD_DATA)
-st_write(parcels, paste0(dat_path, "/Bowen_base/Parcels/parcels_bowen.shp"))
+st_write(parcels, paste0(dat_path, "/Bowen_base/Parcels/parcels_bowen.gpkg"))
 
 # Read saved parcel data
-parcels <- st_read(paste0(dat_path, "/Bowen_base/Parcels/parcels_bowen.shp"))
+parcels <- st_read(paste0(dat_path, "/Bowen_base/Parcels/parcels_bowen.gpkg"))
 
-tm_shape(parcels) +
-  tm_polygons()
+tmap_mode("view")
+tm_shape(parcels_park) +
+  tm_polygons() 
+
+st_write(parcels_park, paste0(dat_path, "/Bowen_base/Parcels/parcels_bowen_park.gpkg"))
 
 ## Combined
 
@@ -74,4 +76,9 @@ tm_shape(SEI) +
   tm_shape(parcels) +
   tm_lines()
 
+
+# BIM Data ----------------------------------------------------------------
+
+dat_path <- "C:/Users/jeff.matheson/OneDrive/Documents/Spatial data library"
+parks <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/ParksGreenSpaces/ParksGreenSpaces.shp"))
 

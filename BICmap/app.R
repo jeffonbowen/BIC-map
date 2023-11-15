@@ -1,8 +1,7 @@
-### Bowen Island Conservancy WEb Mapping Application
-
+### Bowen Island Conservancy Web Mapping Application
 
 library(shiny)
-library(shinythemes)
+library(bslib)
 library(tidyverse)
 library(leaflet)
 library(htmltools)
@@ -12,49 +11,44 @@ library(bcmaps)
 dat_path <- "C:/Users/jeff.matheson/OneDrive/Documents/Spatial data library"
 
 # Bowen boundary
-# Comes in bc albers.Lidar data is in UTM Xone 10.
-munis <- bcmaps::municipalities()
-bowen <- filter(munis, ADMIN_AREA_ABBREVIATION == "Bowen Island") %>% 
-  st_transform(crs = 4326) %>% as_Spatial()
+bowen <- st_read(paste0(dat_path, "/Bowen_base/bowen_muni_bdry.gpkg")) %>% 
+  st_transform(crs = 4326)
 
-parcels <- st_read(paste0(dat_path, "/Bowen_base/Parcels/parcels_bowen.shp"))
-
+# Parcels
+parcels <- st_read(paste0(dat_path, "/Bowen_base/Parcels/parcels_bowen.gpkg")) %>% 
+  st_transform(crs = 4326)
 
 # Create basemap
-
-basemap <- leaflet(options = leafletOptions(minZoom = 5, maxZoom = 30)) %>% 
-  addTiles(group = "OSM (default)")  %>%   
-  addProviderTiles(providers$Esri.WorldStreetMap, group = "Street Map") %>%    
-  addProviderTiles(providers$Wikimedia, group = "Wikimedia") %>%
-  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery") %>%
-  # Layers control
+m <- leaflet() %>%
+  addTiles(group = "OSM (default)", layerId = 1)  %>%
+  addProviderTiles(providers$OpenTopoMap, group = "Open Topo") %>%    
+  addProviderTiles(providers$Esri.WorldImagery, group = "ESRI Imagery") %>%
+  addPolygons(data = bowen, color = "green", fill = FALSE) %>% 
+  addPolygons(data = parcels, color = "grey", fill  = FALSE, weight = 1,
+              group = "Parcels") %>% 
   addLayersControl(
-    baseGroups = c("OSM (default)", "Street Map", "Wikimedia", "Imagery"),
-#      overlayGroups = c("Point Count Locations","Detections"),
-    options = layersControlOptions(collapsed = TRUE)) %>% 
-  # Add measurement tool
+    baseGroups = c("OSM (default)", "Open Topo Map", "ESRI Imagery"),
+    overlayGroups = c("Parcels"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>% 
   addMeasure(primaryLengthUnit = "metres",
              primaryAreaUnit = "hectares") %>% 
-  addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,
-             opacity = 0.8, fillOpacity = 0, data = bowen, 
-             group = "Boundaries") 
-basemap
-
+  addGraticule()
+m  
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
-  
+
   # Set theme
-  theme = shinytheme("flatly"),
-  
-  # App title
-  titlePanel("Bowen Island Conservancy - BICmap"),
+  theme = bs_theme(version = 4, bootswatch = "minty"),
   
   # Sidebar layout with input and output definitions
   sidebarLayout(
     
     sidebarPanel(
       
+      # App title
+      h2("BICmap"),
       p ("Spatial layers relevant to biodiversity conservation on Bowen Island"),
       hr(),
       hr(),
@@ -71,7 +65,7 @@ server <- function(input, output) {
 
   # Create Map    
   output$mymap <- renderLeaflet({
-    basemap
+    m
     })
 }
 
