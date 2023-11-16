@@ -80,5 +80,15 @@ tm_shape(SEI) +
 # BIM Data ----------------------------------------------------------------
 
 dat_path <- "C:/Users/jeff.matheson/OneDrive/Documents/Spatial data library"
+
+list.files(dat_path)
+
+list.files(dat_path, pattern = "*shp", full.names = TRUE, recursive = TRUE,
+           include.dirs = FALSE)
+
+
+dat_path |>
+  dir_ls(recurse = TRUE, regexp = 'shp$') 
+
 parks <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/ParksGreenSpaces/ParksGreenSpaces.shp"))
 
