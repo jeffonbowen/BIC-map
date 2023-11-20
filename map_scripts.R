@@ -3,8 +3,10 @@
 library(tidyverse)
 library(sf)
 library(tmap)
+library(leaflet)
 library(bcmaps)
 library(bcdata)
+library(terra)
 
 # Bowen boundary
 # Comes in bc albers.Lidar data is in UTM Xone 10.
@@ -91,4 +93,28 @@ dat_path |>
   dir_ls(recurse = TRUE, regexp = 'shp$') 
 
 parks <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/ParksGreenSpaces/ParksGreenSpaces.shp"))
+
+
+# Canopy Height Model -----------------------------------------------------
+
+chm <- rast("dat_spatial/chm.tif")
+chm5 <- rast("dat_spatial/chm5.tif") |> 
+  terra::project("epsg:4326")
+chm10 <- aggregate(chm, 10, fun = "max") |> 
+  terra::project("epsg:4326")
+writeRaster(chm10, "dat_spatial/chm10.tif", overwrite = TRUE)
+
+chm10 <- rast("dat_spatial/chm10.tif")
+
+pal <- colorNumeric(c("white", "green", "darkgreen"), values(chm10),
+                    na.color = "transparent")
+
+leaflet() |>
+  addTiles() |> 
+  addRasterImage(chm10, colors = pal, opacity = 0.8) |> 
+  addLegend(pal = pal, values = values(chm10),
+            title = "Veg Ht (Max)")
+  
+
+
 
