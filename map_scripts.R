@@ -1,15 +1,19 @@
 ### Bowen Island Mapping and Analysis ###
+{
 
 library(tidyverse)
+library(readxl)
 library(sf)
 library(tmap)
 library(leaflet)
 library(bcmaps)
 library(bcdata)
 library(terra)
+library(rgbif)
+}
 
 # Bowen boundary
-# Comes in bc albers.Lidar data is in UTM Xone 10.
+# Comes in bc albers. Lidar data is in UTM zone 10.
 munis <- bcmaps::municipalities()
 bowen <- filter(munis, ADMIN_AREA_ABBREVIATION == "Bowen Island")
 
@@ -117,4 +121,108 @@ leaflet() |>
   
 
 
+# GBIF --------------------------------------------------------------------
 
+# View credentials
+usethis::edit_r_environ()
+
+
+bowen <- st_read("dat_spatial/bowen_muni_bdry.gpkg") |> 
+  st_transform(crs = 4326)
+
+bowen_wkt <- bowen |> st_geometry() |> 
+  st_as_text()
+
+
+gbif_download <- occ_download(pred("gadm", "CAN.2.14.4_1"),
+                              pred("hasGeospatialIssue", FALSE),
+                              pred("hasCoordinate", TRUE),
+                              pred("occurrenceStatus","PRESENT"), 
+                              pred_not(pred_in("basisOfRecord",c("FOSSIL_SPECIMEN","LIVING_SPECIMEN"))),
+                              format = "SIMPLE_CSV"
+)
+#gbif_download
+occ_download_wait(gbif_download)
+
+gbif_dat <- occ_download_get(gbif_download, overwrite = TRUE) %>% 
+  occ_download_import()
+
+# Select columns of interest.
+# Remove records with no species name (i.e., ID is to genus)
+gbif_dat <- gbif_dat %>% 
+  select(gbifID, kingdom, species, locality, occurrenceStatus,
+         lat = decimalLatitude, long = decimalLongitude,
+         xy_uncert_m = coordinateUncertaintyInMeters,
+         eventDate, collectionCode, issue) |> 
+  filter(!is.na(species))
+
+write_csv(gbif_dat, "dat_spatial/gbif_dat_cleaned.csv")
+
+
+library(leafgl)
+
+
+library(taxize)
+
+
+
+leaflet() |>
+  addTiles(group = "OSM (default)")  |>
+  addProviderTiles(providers$OpenTopoMap, group = "Open Topo") |>    
+  addProviderTiles(providers$Esri.WorldImagery, group = "ESRI Imagery") |>
+  addPolygons(data = bowen, color = "green", fill = FALSE) |> 
+  addPolygons(data = parcels, color = "grey", fill  = FALSE, weight = 1,
+              group = "Parcels") |> 
+  addPolygons(data = parks, color = "red", fill  = FALSE, weight = 2,
+              group = "Protected Areas",
+              popup = parks$parkname) |> 
+  addCircles(data = gbif_dat, ~long, ~lat, radius = 5,
+             popup = ~species) |> 
+addLayersControl(
+    baseGroups = c("OSM (default)", "Open Topo", "ESRI Imagery"),
+    overlayGroups = overlay.gbif,
+    options = layersControlOptions(collapsed = FALSE),
+    position = "topleft") |>
+  # addLegend(pal = pal.chm, values = values(chm),
+  #           title = "Canopy Ht (m)", group = "Canopy Height") |> 
+  addMeasure(primaryLengthUnit = "metres",
+             primaryAreaUnit = "hectares")
+
+
+# Join with BCSEE
+
+bcsee <- read_excel("dat/summaryExport.xlsx", col_types = "text")
+
+# High-level look at what has been downloaded
+table(bcsee$Kingdom, bcsee$`Classification Level`)
+
+# So many columns. Keep the columns that are most likely to be used. 
+# Also add a new column with just genus-species binomial for linking to GBIF
+# Remove the Local Terrestrial Community so that its species only.
+
+bcsee <- bcsee %>% 
+  select("Element Code", "Scientific Name", "English Name", "Classification Level",
+         "Species Code", "Class (English)", "Kingdom", "Family", "Global Status", 
+         "Prov Status", "BC List", "COSEWIC", "SARA Schedule", "SARA Status", 
+         "Migratory Bird Convention Act"
+  ) %>% 
+  mutate(species = word(`Scientific Name`, 1, 2)) %>% 
+  select("Element Code", "Scientific Name", species, everything()) %>% 
+  filter(`Classification Level` != "Local Terrestrial Community")
+
+gbif_common <- gbif_dat |> 
+  left_join(bcsee, by = "species") |> 
+  dplyr::select(kingdom, species, Kingdom, `Class (English)`, `English Name`, lat, long, eventDate)
+
+write_csv(gbif_common, "dat/gbif_common.csv")
+
+# Density
+
+library(adehabitatHR)
+
+gbif_sp <- gbif_dat |> sf::st_as_sf(coords = c("long", "lat"),
+                    crs = 4326) |>
+  mutate(id = 1) |> 
+  as("Spatial")
+
+dat_kud <- kernelUD(gbif_sp, xy = data$coords, grid = 10, same4all = TRUE)
