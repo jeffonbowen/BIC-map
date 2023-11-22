@@ -57,7 +57,24 @@ ui <- page_navbar(
   
   nav_panel(
     title = "Home",
-    leafletOutput("main", width = "100%", height = "100%")
+    layout_column_wrap(
+      width = NULL,
+      style = css(grid_template_columns = "1fr 4fr"),
+      
+      card(
+        card_header("Bowen Island Conservancy's Biodiversity Data Explorer"),
+        card_body(p("This website is currently in development. Updates and revisions are ongoing."),
+                  p("Select layers in the map window."),
+                  p("Other map themes can be accessed in the menu bar.")
+        )
+        ),
+      
+      card(
+        card_body(
+          leafletOutput("main", width = "100%", height = "100%")
+          )
+        )
+      )
     ),
   
   nav_panel(
@@ -69,9 +86,11 @@ ui <- page_navbar(
       card(
         card_header("Explore Locations of Sensitive Ecosystems"),
         card_body(
+          p("Colour theme to be revised"),
+          p("Still working on this selection tool."),
           selectInput("class",
                       label = "Select Sensitive Ecosystem",
-                      choices = c("Wetland", "Mature Forest"))
+                      choices = distinct(sei, comp1lgnd))
           ),
         ),
       
@@ -87,7 +106,14 @@ ui <- page_navbar(
       width = NULL,
       style = css(grid_template_columns = "1fr 4fr"),
       card(
-        card_body("Explore data from the Global Biodiversity Information Facility (GBIF)")
+        card_body("Explore data from the Global Biodiversity Information Facility (GBIF)",
+                  p("GBIF aggregates biodivsersity records from thousands of repositories, including eBird, iNaturalist and BC Conservation Data Centre."),
+                  p("Select a point to show the species names."),
+                  p("Lots to fix up here. Many common names missing."),
+                  p("Show distribution of a selected species. Still refining it."),
+                  selectInput("name",
+                              label = "Select common name",
+                              choices = arrange(distinct(gbif_dat, `English Name`))))
         ),
       card(
         leafletOutput("gbif", width = "100%", height = "100%")
@@ -99,7 +125,8 @@ ui <- page_navbar(
 
   nav_menu(
     title = "About",
-    align = "right"
+    align = "right",
+    value = "Nothing here yet"
     )
   )
 
@@ -127,7 +154,7 @@ server <- function(input, output) {
   pal.chm <- colorNumeric(c("white", "green", "darkgreen"), values(chm),
                          na.color = "transparent")
 
-  output$home <- renderLeaflet({
+  output$main <- renderLeaflet({
     leaflet() |>
       addTiles(group = "OSM (default)")  |>
       addProviderTiles(providers$OpenTopoMap, group = "Open Topo") |>    
@@ -155,8 +182,9 @@ server <- function(input, output) {
   
   # SEI Map
 
-  overlays.sei <- "SEI"
+  overlays.sei <-  c("Parcels", "Protected Areas", "SEI")
   
+  # Need to fix up the pallete.
 # previewColors(colorFactor(c("#CF5988", "#59261C", "#2F4063", "#FFA600", "#B35344", "#A2AB74", "#518724", "#96753F", "#314510", "#E85442", "#522961", "#871030", "#246954", "#B8E157"), domain = NULL), c("AP", "ES", "FW", "HB", "IT", "MF", "MF", "OD", "OF", "RI", "SV", "WN", "WD", "YF", "YS"))
   
 # pal.sei <- colorFactor(c("#2F4063", "#FFA600", "#B35344", "#518724", "#96753F", 
@@ -164,11 +192,8 @@ server <- function(input, output) {
 #                            "#E8DBBA", "#B8E157", "#FDD3BD"), 
 #                          c("FW", "HB", "IT", "MF", "OD", "OF", "RI", "SV", "WD", "WN", "XX", "YF", "YS"))
 
-  pal.sei <- colorFactor(palette = c("#2F4063", "#FFA600", "#B35344", "#518724", 
-                                   "#96753F", 
-                            "#314510", "#E85442", "#522961", "#246954", "#871030",
-                            "#E8DBBA", "#B8E157", "#FDD3BD"), 
-                          sei$secl_1)
+  pal.sei <- colorFactor(palette = topo.colors(13), 
+                          sei$comp1lgnd)
 
   output$sei <- renderLeaflet({
     leaflet() |>
@@ -181,35 +206,63 @@ server <- function(input, output) {
       addPolygons(data = parks, color = "red", fill  = FALSE, weight = 2,
                   group = "Protected Areas",
                   popup = parks$parkname) |> 
-      addPolygons(data = sei, fillColor = "blue",
+      addPolygons(data = sei, 
                   group = "SEI",
-#                  color = ~pal.sei(sei$secl_1),
-                  popup = paste(sei$comp1lgnd, "<br>", 
-                                sei$comp2lgnd, "<br>", sei$comp3lgnd)) |> 
+                  color = ~pal.sei(sei$comp1lgnd), 
+                  fillOpacity = 0.6,
+                  stroke = FALSE,
+                  popup = paste("1: ", sei$comp1lgnd, "<br>", 
+                                "2: ", sei$comp2lgnd_, "<br>", 
+                                "3: ", sei$comp3lgnd)) |> 
       addLayersControl(
         baseGroups = c("OSM (default)", "Open Topo", "ESRI Imagery"),
         overlayGroups = overlays.sei,
         options = layersControlOptions(collapsed = FALSE),
         position = "topleft") |> 
+      addLegend(pal = pal.sei, values = sei$comp1lgnd,
+                title = "Dominant Eco", group = "SEI") |> 
       addMeasure(primaryLengthUnit = "metres",
                  primaryAreaUnit = "hectares") |> 
       addGraticule()
   })
 
+#     observeEvent(
+#     input$class, {
+# #      sei1 <- filter(sei, comp1lgnd == input$class)
+#       leafletProxy(sei) %>%
+#         hideGroup("SEI") |> 
+#         addPolygons(data = filter(sei, comp1lgnd == input$class), 
+#                     color = "red", fill = TRUE, 
+#                     fillOpacity = 0.6, stroke = FALSE, 
+#                     group = "sei_filter") |> 
+#         addPolygons(data = filter(sei, comp2lgnd == input$class), 
+#                     color = "orange", fill = TRUE, 
+#                     fillOpacity = 0.6, stroke = FALSE,
+#                     group = "sei_filter") |> 
+#         addPolygons(data = filter(sei, comp3lgnd == input$class), 
+#                     color = "yellow", fill = TRUE, 
+#                     fillOpacity = 0.6, stroke = FALSE,
+#                     group = "sei_filter") |> 
+#         addLegend(pal = c("red", "orange", "yellow"), 
+#                   values = c("Primary", "Secondary", "Tertiary"),
+#                   title = "SEI Class", group = "sei_filter")
+#       }
+#     )
+#   
   
   overlay.gbif  <- c("Parcels", "Protected Areas", "GBIF Observations")
-  pal.gbif <- colorFactor(topo.colors(6), gbif_common$kingdom)
+  pal.gbif <- colorFactor(topo.colors(6), gbif_dat$kingdom)
   
   output$gbif <- renderLeaflet({
-      leaflet() |>
+      leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
       addTiles(group = "OSM (default)")  |>
       addProviderTiles(providers$OpenTopoMap, group = "Open Topo") |>    
       addProviderTiles(providers$Esri.WorldImagery, group = "ESRI Imagery") |>
       addPolygons(data = bowen, color = "green", fill = FALSE) |> 
       addPolygons(data = parcels, color = "grey", fill  = FALSE, weight = 1,
                   group = "Parcels") |> 
-      addCircles(data = gbif_common, ~long, ~lat, radius = 1,
-                 popup = gbif_common,
+      addCircles(data = gbif_dat, ~long, ~lat, radius = 1,
+                 popup = paste(gbif_dat$species, "<br>", gbif_dat$`English Name`),
                  color = ~pal.gbif(kingdom),
                  group = "GBIF Observations") |> 
       addPolygons(data = parks, color = "red", fill  = FALSE, weight = 2,
@@ -220,11 +273,22 @@ server <- function(input, output) {
         overlayGroups = overlay.gbif,
         options = layersControlOptions(collapsed = FALSE),
         position = "topleft") |>
-      addLegend(pal = pal.gbif, values = ~kingdom,
+      addLegend(pal = pal.gbif, values = gbif_dat$kingdom,
                 title = "Kingdom", group = "GBIF Observations") |> 
       addMeasure(primaryLengthUnit = "metres",
-                 primaryAreaUnit = "hectares")
+                 primaryAreaUnit = "hectares") |> 
+      hideGroup(c("Parcels", "Protected Areas"))
     })
+  
+  observeEvent(
+    input$name, {
+      gbif_filter <- filter(gbif_dat, `English Name` == input$name)
+        leafletProxy("gbif") %>%
+          clearGroup("gbif_select") |> 
+          addCircles(data = gbif_filter, color = "black", fill = FALSE, 
+                     radius = 40, weight = 8, opacity = 1, group = "gbif_select")
+        }
+    )
   
 }
 
