@@ -1,6 +1,5 @@
 ### Bowen Island Mapping and Analysis ###
 {
-
 library(tidyverse)
 library(readxl)
 library(sf)
@@ -10,17 +9,14 @@ library(bcmaps)
 library(bcdata)
 library(terra)
 library(rgbif)
+library(DT)
 }
 
 # Bowen boundary
 # Comes in bc albers. Lidar data is in UTM zone 10.
-munis <- bcmaps::municipalities()
-bowen <- filter(munis, ADMIN_AREA_ABBREVIATION == "Bowen Island")
+# munis <- bcmaps::municipalities()
+# bowen <- filter(munis, ADMIN_AREA_ABBREVIATION == "Bowen Island")
 
-tmap_mode("view")
-tm_shape(bowen) +
-  tm_lines()
-#  st_transform(crs = 4326) %>% as_Spatial()
 
 # SEI ---------------------------------------------------------------------
 
@@ -126,46 +122,75 @@ leaflet() |>
 # View credentials
 usethis::edit_r_environ()
 
+gbif_download <- 
+  occ_download(pred("gadm", "CAN.2.14.4_1"),
+               pred("hasGeospatialIssue", FALSE),
+               pred("hasCoordinate", TRUE),
+               pred("occurrenceStatus","PRESENT"), 
+               pred_not(pred_in("basisOfRecord",
+                                c("FOSSIL_SPECIMEN","LIVING_SPECIMEN"))),
+               format = "SIMPLE_CSV"
+               )
 
-bowen <- st_read("dat_spatial/bowen_muni_bdry.gpkg") |> 
-  st_transform(crs = 4326)
-
-bowen_wkt <- bowen |> st_geometry() |> 
-  st_as_text()
-
-
-gbif_download <- occ_download(pred("gadm", "CAN.2.14.4_1"),
-                              pred("hasGeospatialIssue", FALSE),
-                              pred("hasCoordinate", TRUE),
-                              pred("occurrenceStatus","PRESENT"), 
-                              pred_not(pred_in("basisOfRecord",c("FOSSIL_SPECIMEN","LIVING_SPECIMEN"))),
-                              format = "SIMPLE_CSV"
-)
 #gbif_download
 occ_download_wait(gbif_download)
 
 gbif_dat <- occ_download_get(gbif_download, overwrite = TRUE) %>% 
   occ_download_import()
 
-# Select columns of interest.
-# Remove records with no species name (i.e., ID is to genus)
-gbif_dat <- gbif_dat %>% 
-  select(gbifID, kingdom, species, locality, occurrenceStatus,
-         lat = decimalLatitude, long = decimalLongitude,
-         xy_uncert_m = coordinateUncertaintyInMeters,
-         eventDate, collectionCode, issue) |> 
-  filter(!is.na(species))
+res <- occ_download_meta(gbif_download)
+gbif_citation(res)
 
-write_csv(gbif_dat, "dat_spatial/gbif_dat_cleaned.csv")
+write_csv(gbif_dat, "dat/gbif_dat.csv")
+
+# Visualization
+
+gbif_dat |> 
+  ggplot(aes(x=reorder(kingdom, kingdom, function(x)-length(x)))) +
+  geom_bar() +
+#  scale_x_discrete(limits=rev) +
+  scale_y_continuous(limits= c(0, 50000)) +
+  geom_text(aes(label = ..count..), stat = "count", vjust = -0.5) +
+  xlab("Kingdom") +
+  theme_bw()
+
+gbif_dat |> 
+  filter(kingdom == "Animalia") |> 
+  ggplot(aes(y = reorder(class, class, function(x)-length(x)))) +
+  geom_bar(show.legend = FALSE) + 
+  theme_bw() +
+  scale_y_discrete(limits=rev) +
+  scale_x_continuous(limits= c(0, 45000)) +
+  ylab("Class in Animalia")
+  geom_text(aes(label = ..count..), stat = "count", hjust = -0.2)
+  
+gbif_dat |> 
+#  mutate(year = factor(year)) |> 
+  group_by(year) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = year, y = count)) +
+  scale_x_continuous(breaks = scales::breaks_width(10)) +
+  geom_point() +
+  theme_bw()
+
+gbif_dat |> 
+  ggplot(aes(y = collectionCode, fill = collectionCode)) +
+  geom_bar(stat = "count", show.legend = FALSE) +
+  theme_bw() +
+  scale_y_discrete(limits=rev)
+
+gbif_dat |> 
+  group_by(species) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = year, y = count)) +
+  scale_x_continuous(breaks = scales::breaks_width(10)) +
+  geom_point() +
+  theme_bw()
 
 
-library(leafgl)
+    
 
-
-library(taxize)
-
-
-
+# Locations
 leaflet() |>
   addTiles(group = "OSM (default)")  |>
   addProviderTiles(providers$OpenTopoMap, group = "Open Topo") |>    
@@ -176,7 +201,7 @@ leaflet() |>
   addPolygons(data = parks, color = "red", fill  = FALSE, weight = 2,
               group = "Protected Areas",
               popup = parks$parkname) |> 
-  addCircles(data = gbif_dat, ~long, ~lat, radius = 5,
+  addCircles(data = gbif_dat, ~decimalLongitude, ~decimalLatitude, radius = 5,
              popup = ~species) |> 
 addLayersControl(
     baseGroups = c("OSM (default)", "Open Topo", "ESRI Imagery"),
@@ -188,6 +213,47 @@ addLayersControl(
   addMeasure(primaryLengthUnit = "metres",
              primaryAreaUnit = "hectares")
 
+
+# Common names from GBIF backbone
+
+vern <- read_tsv("dat/backbone/VernacularName.tsv") |> 
+  filter(language == "en")
+
+gbif_vern <- gbif_dat |> 
+  left_join(vern, join_by(taxonKey == taxonID))
+
+noname <- gbif_vern |> 
+  filter(is.na(vernacularName))
+gbif_vern |> 
+  group_by(occurrenceID) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = count)) +
+    geom_bar(stat = "count")
+
+# Many common names for each record. Pick first, for now,
+gbif_vern <- gbif_vern |> 
+  group_by(gbifID) |> 
+  slice_head(n= 1)
+
+write_csv(gbif_vern, "dat/gbif_vern.csv")
+write_csv(gbif_vern, "BICmap/dat/gbif_vern.csv")
+saveRDS(gbif_vern, file = "BICmap/dat/gbif_vern.rds")
+
+gbif_vern <- readRDS(file = "BICmap/dat/gbif_vern.rds")
+
+gbif_test <- dplyr::slice_head(gbif_vern, n = 500)
+
+gbif_test <- gbif_vern[1:500, ]
+saveRDS(gbif_test, file = "BICmap/dat/gbif_test.rds")
+
+
+# Select priority columns for BICmap
+
+# Serve it up
+
+  
+datatable(gbif_vern[, c(1, 4, 6, 14, 51, 33)])
+  
 
 # Join with BCSEE
 
@@ -216,6 +282,10 @@ gbif_common <- gbif_dat |>
 
 write_csv(gbif_common, "dat/gbif_common.csv")
 
+
+
+
+
 # Density
 
 library(adehabitatHR)
@@ -226,3 +296,40 @@ gbif_sp <- gbif_dat |> sf::st_as_sf(coords = c("long", "lat"),
   as("Spatial")
 
 dat_kud <- kernelUD(gbif_sp, xy = data$coords, grid = 10, same4all = TRUE)
+
+
+
+
+
+
+
+x <-   name_lookup(name='Helianthus annuus')
+  name_backbone(name='Helianthus', rank='genus', kingdom='plants')
+  name_backbone(name='Poa', rank='genus', family='Poaceae')
+  
+  # Verbose - gives back alternatives
+  ## Strictness
+name_backbone_verbose(name='Poa', kingdom='plants',
+                        strict=FALSE)
+name_backbone_verbose(name='Helianthus annuus', kingdom='plants',
+                        strict=TRUE)
+  
+  # Non-existent name - returns list of length 3 stating no match
+name_backbone(name='Aso')
+name_backbone(name='Oenante')
+  
+  # Pass on curl options
+name_backbone(name='Oenante', curlopts = list(verbose=TRUE))
+
+  
+# Inaturalist
+  
+library(rinat)
+
+  
+  
+  
+  
+  
+  
+
