@@ -66,14 +66,19 @@ ui <- page_navbar(
       card(
         card_header("SEI Overview"),
         card_body(
-          fill = TRUE,
-          # height = 50,
-          tableOutput("sei_overview")
+          div(
+            style = "font-size:85%",
+            fill = TRUE,
+            tableOutput("sei_overview")
+            )
           ),
         card_header("Ecosystem Detail"),
         card_body(
-          textOutput("listclass"),
-          tableOutput("sei_table")
+          div(
+            style = "font-size:85%",
+            textOutput("listclass"),
+            tableOutput("sei_table")
+          )
         )
         )
         )
@@ -102,7 +107,7 @@ ui <- page_navbar(
       card(
         div(
           DTOutput("species_table", height = "auto", fill = TRUE),
-          style = "font-size:85%"
+          style = "font-size:75%"
           )
       ),
       
@@ -224,14 +229,11 @@ server <- function(input, output, session) {
 
 # iNaturalist --------------------------------------------------------------
 
-  updateSelectizeInput(session, 'name', choices = (inat$common_name), 
-                       server = TRUE)
-  
   overlay.inat  <- c("Parcels", "Parks and Green Spaces", "iNat Obs")
   pal.inat <- colorFactor(topo.colors(6), inat$taxon_kingdom_name)
   
   output$inat <- renderLeaflet({
-    base |> 
+inatm <-     base |> 
       addCircles(dat = inat, lng = ~longitude, lat = ~latitude,
                        radius = 1,
                        popup = paste(inat$common_name, "<br>",
@@ -258,36 +260,78 @@ server <- function(input, output, session) {
     server = TRUE
   )
   
+  # Message in console for debugging.
   observeEvent(input$species_table_rows_selected, {
-    
-    output$sp_sel <- eventReactive(input$species_table_rows_selected, {
-      sp_list[input$species_table_rows_selected, "Common Name"]
-    }
-    )
-    
-    # inat_filter <- filter(inat, common_name == sp_sel)
-    #   leafletProxy("inat") %>%
-    #     clearGroup("iNat Obs") |>
-    #     addCircles(data = inat_filter,
-    #                radius = 1,
-    #                popup = paste(inat$common_name, "<br>",
-    #                              inat$scientific_name, "<br>",
-    #                              inat$observed_on),
-    #                color = ~pal.inat(taxon_kingdom_name),
-    #                group = "iNat Obs") |> 
-    #     addLayersControl(
-    #       baseGroups = basegroups,
-    #       overlayGroups = overlay.inat,
-    #       options = layersControlOptions(collapsed = TRUE),
-    #       position = "topleft") |>
-    #     addLegend(pal = pal.inat, values = inat$taxon_kingdom_name,
-    #               title = "Kingdom", group = "iNat Obs") |>
-    #     addMeasure(primaryLengthUnit = "metres",
-    #                primaryAreaUnit = "hectares") |>
-    #     hideGroup(c("Parcels", "Protected Areas"))
-      
-      }
+    message(sp_list[input$species_table_rows_selected, "Scientific Name"])
+  }
   )
+    
+#  output$sp_sel <- renderPrint( {
+#    sp_list[input$species_table_rows_selected, "Scientific Name"]
+#    }
+#    )
+    
+  observeEvent(input$species_table_rows_selected, {
+    sp_sel <- sp_list[input$species_table_rows_selected, "Scientific Name"]
+  }
+  )
+
+  inat_filter <- reactive(filter(inat, scientific_name == sp_sel))
+  
+  
+  observeEvent(input$species_table_rows_selected, {
+    leafletProxy("inat")|> 
+      clearGroup("iNat Obs") |>
+      clearControls() |> 
+      addCircles(dat = inat_filter, lng = ~longitude, lat = ~latitude,
+                 radius = 1,
+                 popup = paste(inat_filter$common_name, "<br>",
+                               inat_filter$scientific_name, "<br>",
+                               inat_filter$observed_on),
+                 color = ~pal.inat(taxon_kingdom_name),
+                 group = "iNat Obs") |>
+      addLayersControl(
+        baseGroups = basegroups,
+        overlayGroups = overlay.inat,
+        options = layersControlOptions(collapsed = TRUE),
+        position = "topleft") |>
+      addLegend(pal = pal.inat, values = inat$taxon_kingdom_name,
+                title = "Kingdom", group = "iNat Obs") |>
+      addMeasure(primaryLengthUnit = "metres",
+                 primaryAreaUnit = "hectares") |>
+      hideGroup(c("Parcels", "Protected Areas"))
+      
+    })
+  
+  # create a proxy to modify datatable without recreating it completely
+  species_table_proxy <- dataTableProxy("species_table")
+  
+  # clear row selections when clear_rows_button is clicked
+  observeEvent(input$clear_rows_button, {
+    selectRows(species_table_proxy, NULL)
+    
+    leafletProxy("inat") |> 
+      clearGroup("iNat Obs") |>
+      clearControls() |> 
+      addCircles(dat = inat, lng = ~longitude, lat = ~latitude,
+                   radius = 1,
+                   popup = paste(inat$common_name, "<br>",
+                                 inat$scientific_name, "<br>",
+                                 inat$observed_on),
+                   color = ~pal.inat(taxon_kingdom_name),
+                   group = "iNat Obs") |> 
+      addLayersControl(
+          baseGroups = basegroups,
+          overlayGroups = overlay.inat,
+          options = layersControlOptions(collapsed = TRUE),
+          position = "topleft") |>
+      addLegend(pal = pal.inat, values = inat$taxon_kingdom_name,
+                  title = "Kingdom", group = "iNat Obs") |>
+      addMeasure(primaryLengthUnit = "metres",
+                   primaryAreaUnit = "hectares") |>
+      hideGroup(c("Parcels", "Parks and Green Spaces"))
+
+  })
   
 }
 
