@@ -2,12 +2,17 @@
 title: "GBIF Summary"
 author: "Jeff Matheson"
 format: html
+project:
+  type: website
+  output-dir: docs
 editor: visual
 ---
 
 ## Quarto
 
 Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+new text
 
 ## Running Code
 

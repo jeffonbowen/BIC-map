@@ -10,6 +10,9 @@ library(bcdata)
 library(terra)
 library(rgbif)
 library(DT)
+library(janitor)
+library(data.table)
+library(SpatialKDE)
 }
 
 # Bowen boundary
@@ -36,6 +39,37 @@ summary(SEI)
 
 sum(SEI$utmstarea)/10000
 sum(SEI$wsize_se1)/10000
+
+SEI <- SEI |> 
+  filter(substr(secl_1,1,1) != "x") 
+d1 <- SEI |> 
+  st_drop_geometry() |> 
+  group_by(comp1lgnd) |> 
+  summarize(Primary = sum(sedec_1 / 10 * st_area_sh / 10000)) |> 
+  rename(`SEI Class` = comp1lgnd)
+d2 <- SEI |> 
+  st_drop_geometry() |> 
+  group_by(comp2lgnd) |> 
+  summarize(Secondary = sum(sedec_2 / 10 * st_area_sh / 10000))|> 
+  rename(`SEI Class` = comp2lgnd)
+d3 <- SEI |> 
+  st_drop_geometry() |> 
+  group_by(comp3lgnd) |> 
+  summarize(Tertiary = sum(sedec_3 / 10 * st_area_sh / 10000)) |> 
+  rename(`SEI Class` = comp3lgnd)
+sei_summary <- d1 |> 
+  full_join(d2, by = "SEI Class") |> 
+  full_join(d3, by = "SEI Class") |> 
+  rowwise() |> 
+  mutate(`Total Area` = sum(c_across(2:4), na.rm = TRUE),
+         `% of Bowen` = `Total Area` / 5071.2 * 100) |> 
+  ungroup() |> 
+  pivot_longer(!`SEI Class`) |> 
+  pivot_wider(names_from = `SEI Class`, values_from = value) |> 
+  rename(Dominance = name)
+
+write_csv(sei_summary, "dat/sei_summary.csv")
+
 
 
 # TEM data from IT --------------------------------------------------------
@@ -79,6 +113,36 @@ tm_shape(SEI) +
   tm_lines()
 
 
+
+# Hillshade ---------------------------------------------------------------
+
+dtm <- rast("dat_spatial/bowen_dtm.tif")
+
+dtm10 <- aggregate(dtm, 10, fun = "mean") |> 
+  terra::project("epsg:4326")
+writeRaster(dtm10, "dat_spatial/dtm10.tif", overwrite = TRUE)
+
+leaflet() |> 
+  addTiles() |> 
+  addRasterImage(dtm10, colors = pal.dtm)
+
+pal.dtm <- colorNumeric(c("darkgreen", "orange"), values(dtm10),
+                        na.color = "transparent")
+
+pal.dtm <- colorNumeric(c("white", "green", "darkgreen"), values(dtm10),
+                        na.color = "transparent")
+
+# hillshade
+dtm_prod <- terrain(dtm10, v = c("slope", "aspect"), unit = "radians")
+dtm_hillshade <- shade(slope = dtm_prod$slope, aspect = dtm_prod$aspect)
+plot(dtm_hillshade, col =gray(0:30/30), legend = FALSE)
+writeRaster(dtm_hillshade, "dat_spatial/hillshade10.tif", overwrite = TRUE)
+
+leaflet() |> 
+  addTiles() |> 
+  addRasterImage(dtm_hillshade, colors = grey(0:100/100))
+
+
 # BIM Data ----------------------------------------------------------------
 
 dat_path <- "C:/Users/jeff.matheson/OneDrive/Documents/Spatial data library"
@@ -93,7 +157,71 @@ dat_path |>
   dir_ls(recurse = TRUE, regexp = 'shp$') 
 
 parks <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/ParksGreenSpaces/ParksGreenSpaces.shp"))
+lakes <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/DPAs/Lakes.shp")) |> 
+  st_transform(crs = 4326)
+ponds <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/DPAs/Ponds.shp")) |> 
+  st_transform(crs = 4326)
+streams <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/DPAs/Streams.shp")) |> 
+  st_transform(crs = 4326)
+watersheds <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/DPAs/Watersheds.shp")) |> 
+  st_transform(crs = 4326)
+wetlands <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/DPAs/Wetlands.shp")) |> 
+  st_transform(crs = 4326)
+eelgrass <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/Eel Grass/MarineEelGrass.shp")) |> 
+  st_transform(crs = 4326)
+foragefish <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/Forage Fish/ForageFish.shp")) |> 
+  st_transform(crs = 4326)
+herons <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/Wildlife/HeronNest.shp")) |> 
+  st_transform(crs = 4326)
+raptors <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/Wildlife/RaptorNest.shp")) |> 
+  st_transform(crs = 4326)
+ravens <- st_read(paste0(dat_path, "/Bowen_base/BIM_data/Wildlife/RavenNest.shp")) |> 
+  st_transform(crs = 4326)
 
+leaflet() |> 
+  addTiles() |> 
+  # addPolygons(dat = lakes, color = "blue", stroke = FALSE) |> 
+  addPolygons(dat = ponds, color = "red", stroke = FALSE) |> 
+  # addPolygons(dat = wetlands, color = "green", stroke = TRUE) |> 
+  # addPolygons(dat = wetlands_ajw, color = "yellow", stroke = TRUE) |> 
+#  addPolylines(dat = streams, weight = 2) |> 
+  addPolylines(dat = streams_ajw, color = "darkgreen", weight = 2)
+  # addPolygons(dat = eelgrass, color = "red") |> 
+  # addPolylines(dat = foragefish, color = "orange")
+  
+c("Lakes", "Ponds", "Wetlands", "Streams", "Wetlands (AJW)", "Streams (AJW)")
+
+plot(lakes)
+
+
+
+# Covenants ---------------------------------------------------------------
+
+c1 <- st_read("../dat_spatial/bowen-covenants-1.gpkg") |> 
+  st_transform(4326) |> select(!id) |> 
+  rename("Covenant" = "Coven..")
+c2 <- st_read("../dat_spatial/bowen-covenants-2.gpkg") |> 
+  st_transform(4326) |> 
+  rename("Covenant" = "covenant..",
+         "Keywords" = "keywords",
+         "Filename" = "filename")
+
+leaflet() |> 
+  addTiles() |> 
+  addPolygons(dat = c1, stroke = FALSE, 
+              color = "yellow", fillOpacity = 1) |> 
+  addPolygons(dat = c2, stroke = FALSE, 
+              color = "orange", fillOpacity = 1)
+
+coven <- bind_rows(c1, c2)
+leaflet() |> 
+  addTiles() |> 
+  addPolygons(dat = coven, stroke = FALSE, 
+              color = "orange", fillOpacity = 1,
+              popup = coven$Keywords)
+  
+
+st_write(coven, "dat/coven.gpkg")
 
 # Canopy Height Model -----------------------------------------------------
 
@@ -286,22 +414,6 @@ write_csv(gbif_common, "dat/gbif_common.csv")
 
 
 
-# Density
-
-library(adehabitatHR)
-
-gbif_sp <- gbif_dat |> sf::st_as_sf(coords = c("long", "lat"),
-                    crs = 4326) |>
-  mutate(id = 1) |> 
-  as("Spatial")
-
-dat_kud <- kernelUD(gbif_sp, xy = data$coords, grid = 10, same4all = TRUE)
-
-
-
-
-
-
 
 x <-   name_lookup(name='Helianthus annuus')
   name_backbone(name='Helianthus', rank='genus', kingdom='plants')
@@ -322,14 +434,47 @@ name_backbone(name='Oenante')
 name_backbone(name='Oenante', curlopts = list(verbose=TRUE))
 
   
-# Inaturalist
+# Inaturalist -------------------------------------------------------------
   
 library(rinat)
 
+# Bowen bounds
+-123.437
+-123.304
   
-  
-  
-  
-  
+inat <- read_csv("../inat/observations-380595.csv")
+
+names(inat)
+
+# Kernal density
+
+inat_sf <- inat |> 
+  st_as_sf(coords = c("longitude", "latitude"), dim = "XY") |> 
+  st_set_crs(4326) |> 
+  st_transform(26910)
   
 
+cell_size <- 100
+band_width <- 1
+  
+raster_inat <- inat_sf %>%
+  create_raster(cell_size = cell_size, side_offset = band_width)  
+
+kde <- inat_sf %>%
+  kde(band_width = band_width, kernel = "quartic", grid = raster_inat)  
+
+plot(kde)
+
+pal = colorNumeric(c("yellow", "orange", "red"), kde@data@values,
+                   na.color = "transparent")
+
+leaflet() |> 
+  addTiles() |> 
+  addCircles(dat = inat, lng = ~longitude, lat = ~latitude,
+             radius = 1) |> 
+  addRasterImage(x = kde, colors = ~pal)
+
+library(tmap)
+tm_shape(kde) +
+  tm_raster(palette = "viridis", title = "KDE Estimate") +
+  tm_layout(legend.outside = TRUE)

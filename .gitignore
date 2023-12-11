@@ -6,6 +6,7 @@ dat_spatial/chm3.tif
 dat_spatial/chm4.tif
 dat_spatial/chm5.tif
 
+/backbone/
 
 # History files
 .Rhistory
