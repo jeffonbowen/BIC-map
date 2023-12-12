@@ -6,7 +6,8 @@ source("global.R")
 
 ui <- page_navbar(
   
-  theme = bs_theme(bootswatch = "cerulean"),
+  theme = bs_theme(bootswatch = "cerulean", 
+                   font_scale = 0.90, spacer = "0.5rem"),
 #                   fg = "#E7E8E8"),
                      
   # Alternates: yeti, superhero, sketchy, sandstone cyborg, cosmo, cerulean
@@ -30,7 +31,7 @@ ui <- page_navbar(
         ),
         card_footer(
           p("Parks and greens spaces, lakes, ponds, wetlands, and streams are from BIM",
-            style = "font-size:80%")
+            style = "font-size:90%")
         )
         ),
       
@@ -49,7 +50,8 @@ ui <- page_navbar(
       style = css(grid_template_columns = "1fr 3fr 1fr"),
       
       card(
-        card_header("Explore Locations of Sensitive Ecosystems"),
+        card_header(
+          tags$b("Explore Locations of Sensitive Ecosystems")),
         card_body(
           radioButtons("class",
                       label = "Select a sensitive ecosystem:",
@@ -64,18 +66,21 @@ ui <- page_navbar(
         ),
 
       card(
-        card_header("SEI Overview"),
+        card_header(
+          tags$b("SEI Overview")),
         card_body(
+          max_height = '300px',
           div(
-            style = "font-size:85%",
+#            style = "font-size:85%",
             fill = TRUE,
             tableOutput("sei_overview")
             )
           ),
-        card_header("Ecosystem Detail"),
+        card_header(
+          tags$b("Ecosystem Detail")),
         card_body(
           div(
-            style = "font-size:85%",
+#            style = "font-size:85%",
             textOutput("listclass"),
             tableOutput("sei_table")
           )
@@ -88,34 +93,36 @@ ui <- page_navbar(
     title = "Species Explorer",
     layout_column_wrap(
       width = NULL,
-      style = css(grid_template_columns = "1fr 2fr 2fr"),
+      style = css(grid_template_columns = "2fr 3fr"),
       card(
         card_body(
-          "Explore data from iNaturalist. ",
-          "Only records classified as research grade are included.", 
-          p("Select a point to show the species name."),
-          p("Use the filters to restrict displayed records."),
-          br(),
+#          max_height = '300px',
+          "Explore data from iNaturalist. Only records classified as research grade are included.", 
+          "Select a point to show the species name. Select a species in the table to show all record locations of that species.",
           actionButton(
             "clear_rows_button",
-            "Clear Selected"
+            "Reset Map",
+            width = '150px',
+            class = "justify-content-center",
             ),
-          textOutput("sp_sel")
-          )
+#          textOutput("sp_sel")
         ),
-      
-      card(
-        div(
-          DTOutput("species_table", height = "auto", fill = TRUE),
-          style = "font-size:75%"
-          )
-      ),
-      
-      card(
-        leafletOutput("inat", width = "100%", height = "100%")
+
+      card_body(
+        class = "p-0",
+        full_screen = TRUE,
+        leafletOutput("inat"
+#                      , width = "100%", height = "100%"
+                      )
       )
-    )
     ),
+
+    card(
+      DTOutput("species_table", height = "auto", fill = TRUE),
+      full_screen = TRUE
+    )
+  )
+),
 
   
   nav_spacer(),  
@@ -124,33 +131,35 @@ ui <- page_navbar(
   nav_menu(
     title = "About",
     align = "right",
-    value = "Nothing here yet"
+    nav_item(
+      "Nothing here yet"
     )
   )
+)
 
 
 # Wrap your UI with secure_app
-# ui <- secure_app(ui)
+ui <- secure_app(ui)
 
 # Server ------------------------------------------------------------------
 
 server <- function(input, output, session) {
   
-  # # call the server part
-  # # check_credentials returns a function to authenticate users
-  # res_auth <- secure_server(
-  #   check_credentials = check_credentials(credentials)
-  # )
-  # 
-  # output$auth_output <- renderPrint({
-  #   reactiveValuesToList(res_auth)
-  # }
-  # )
+  # call the server part
+  # check_credentials returns a function to authenticate users
+  res_auth <- secure_server(
+    check_credentials = check_credentials(credentials)
+  )
+
+  output$auth_output <- renderPrint({
+    reactiveValuesToList(res_auth)
+  }
+  )
   
   
 # Main map ----------------------------------------------------------------
   
-#  bs_themer()
+  #bs_themer()
   
   output$main <- renderLeaflet({
     main
@@ -159,7 +168,7 @@ server <- function(input, output, session) {
 
 # SEI Explorer ------------------------------------------------------------
 
-  overlays.sei <-  c(overlays.base, "SEI")
+  overlays.sei <-  c(overlays.base, "SEI", "Selected SEI")
   
   output$sei <- renderLeaflet({
     base |>
@@ -181,20 +190,20 @@ server <- function(input, output, session) {
   observeEvent(
     input$class, {
       leafletProxy("sei") %>%
-        clearGroup("select") |>
+        clearGroup("Selected SEI") |>
         clearControls() |>
         addPolygons(data = filter(sei, comp3lgnd == input$class),
                     color = "yellow", fill = TRUE,
                     fillOpacity = 0.8, stroke = FALSE,
-                    group = "select") |>
+                    group = "Selected SEI") |>
         addPolygons(data = filter(sei, comp2lgnd == input$class),
                     color = "orange", fill = TRUE,
                     fillOpacity = 0.8, stroke = FALSE,
-                    group = "select") |>
+                    group = "Selected SEI") |>
         addPolygons(data = filter(sei, comp1lgnd == input$class),
                     color = "red", fill = TRUE,
                     fillOpacity = 0.8, stroke = FALSE,
-                    group = "select") |>
+                    group = "Selected SEI") |>
         addPolygons(data = sei, 
                     group = "SEI",
                     color = "green", 
@@ -202,7 +211,13 @@ server <- function(input, output, session) {
                     weight = 1, popup = pop.sei) |> 
         addLegend(colors = c("red", "orange", "yellow"),
                   labels = c("Primary", "Secondary", "Tertiary"),
-                  title = "Ecosystem Dominance")
+                  title = "Ecosystem Dominance") |> 
+        addLayersControl(
+          baseGroups = basegroups,
+          overlayGroups = overlays.sei,
+          options = layersControlOptions(collapsed = FALSE),
+          position = "topleft")
+        
     }
   )
   
@@ -233,7 +248,7 @@ server <- function(input, output, session) {
   pal.inat <- colorFactor(topo.colors(6), inat$taxon_kingdom_name)
   
   output$inat <- renderLeaflet({
-inatm <-     base |> 
+    base |> 
       addCircles(dat = inat, lng = ~longitude, lat = ~latitude,
                        radius = 1,
                        popup = paste(inat$common_name, "<br>",
@@ -255,7 +270,12 @@ inatm <-     base |>
 
   output$species_table <- renderDT(
     datatable(sp_list, filter = 'top', 
-              options = list(pageLength = -1),
+              options = list(pageLength = -1,
+                             autoWidth = TRUE
+                             # ,
+                             # columnDefs = list(list(width = '200px', 
+                             #                        targets = c(1, 3)))
+                             ),
               selection = "single"),
     server = TRUE
   )
@@ -266,37 +286,25 @@ inatm <-     base |>
   }
   )
     
-#  output$sp_sel <- renderPrint( {
-#    sp_list[input$species_table_rows_selected, "Scientific Name"]
-#    }
-#    )
-    
   observeEvent(input$species_table_rows_selected, {
-    sp_sel <- sp_list[input$species_table_rows_selected, "Scientific Name"]
-  }
-  )
-
-  inat_filter <- reactive(filter(inat, scientific_name == sp_sel))
-  
-  
-  observeEvent(input$species_table_rows_selected, {
+    sp_sel <- as.character(sp_list[input$species_table_rows_selected, 
+                                   "Scientific Name"])
+    inat_filter <- filter(inat, scientific_name == sp_sel)
     leafletProxy("inat")|> 
-      clearGroup("iNat Obs") |>
+    #  inatm |> 
+      clearGroup(c("iNat Obs", "select")) |>
       clearControls() |> 
       addCircles(dat = inat_filter, lng = ~longitude, lat = ~latitude,
                  radius = 1,
                  popup = paste(inat_filter$common_name, "<br>",
                                inat_filter$scientific_name, "<br>",
                                inat_filter$observed_on),
-                 color = ~pal.inat(taxon_kingdom_name),
-                 group = "iNat Obs") |>
+                 color = "navy",
+                 group = "select") |>
       addLayersControl(
         baseGroups = basegroups,
-        overlayGroups = overlay.inat,
         options = layersControlOptions(collapsed = TRUE),
         position = "topleft") |>
-      addLegend(pal = pal.inat, values = inat$taxon_kingdom_name,
-                title = "Kingdom", group = "iNat Obs") |>
       addMeasure(primaryLengthUnit = "metres",
                  primaryAreaUnit = "hectares") |>
       hideGroup(c("Parcels", "Protected Areas"))
@@ -305,21 +313,21 @@ inatm <-     base |>
   
   # create a proxy to modify datatable without recreating it completely
   species_table_proxy <- dataTableProxy("species_table")
-  
+
   # clear row selections when clear_rows_button is clicked
   observeEvent(input$clear_rows_button, {
     selectRows(species_table_proxy, NULL)
-    
-    leafletProxy("inat") |> 
+
+    leafletProxy("inat") |>
       clearGroup("iNat Obs") |>
-      clearControls() |> 
+      clearControls() |>
       addCircles(dat = inat, lng = ~longitude, lat = ~latitude,
                    radius = 1,
                    popup = paste(inat$common_name, "<br>",
                                  inat$scientific_name, "<br>",
                                  inat$observed_on),
                    color = ~pal.inat(taxon_kingdom_name),
-                   group = "iNat Obs") |> 
+                   group = "iNat Obs") |>
       addLayersControl(
           baseGroups = basegroups,
           overlayGroups = overlay.inat,
