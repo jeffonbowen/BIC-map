@@ -271,11 +271,7 @@ server <- function(input, output, session) {
   output$species_table <- renderDT(
     datatable(sp_list, filter = 'top', 
               options = list(pageLength = -1,
-                             autoWidth = TRUE
-                             # ,
-                             # columnDefs = list(list(width = '200px', 
-                             #                        targets = c(1, 3)))
-                             ),
+                             autoWidth = TRUE),
               selection = "single"),
     server = TRUE
   )
@@ -307,8 +303,11 @@ server <- function(input, output, session) {
         position = "topleft") |>
       addMeasure(primaryLengthUnit = "metres",
                  primaryAreaUnit = "hectares") |>
-      hideGroup(c("Parcels", "Protected Areas"))
-      
+      hideGroup(c("Parcels", "Protected Areas")) |> 
+      flyToBounds(lng1 = min(inat_filter$longitude), 
+                lat1 = min(inat_filter$latitude), 
+                lng2 = max(inat_filter$longitude), 
+                lat2 = max(inat_filter$latitude))
     })
   
   # create a proxy to modify datatable without recreating it completely
