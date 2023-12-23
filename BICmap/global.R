@@ -26,6 +26,9 @@ credentials <- data.frame(
 
 # Prep data and map -------------------------------------------------------
 
+changelog <- read.csv("changelog.txt", header = FALSE, sep  = "&")
+
+
 ## Load overlay group layers
 
 # For dev, set this working directory
@@ -94,10 +97,10 @@ sei_lgnd <- tibble(
                "Old Forest", "Riparian", "Sparsely Vegetated", "Woodland", 
                "Wetland", "Non SE/ME", "Young Forest", "Yound Forest (small)",
                "River (Riparian subclass)", "Freshwater Reservoirs"),
-  hex_colour = c("#CF5988", "#59261C", "#2F4063", "#FFA600", "#B35344", 
-                 "#A2AB74", "#518724", "#96753F", "#314510", "#E85442", 
-                 "#522961", "#246954", "#871030", "#E8DBBA", "#B8E157", 
-                 "#FDD3BD", "#6C81A6", "#6EB5DB")) |> 
+  hex_colour = c("#CE5888", "#59261C", "#2E4064", "#FFA500", "#B35241", 
+                 "#A2AB74", "#508624", "#97753E", "#304411", "#E35541",
+                 "#512960", "#246954", "#87102E", "#E8DBBA", "#B7E057",
+                 "#FBD2BD", "#6B81A6", "#6DB4D9")) |> 
   filter(!(complgnd %in% c("Alpine", "River (Riparian subclass)", 
                            "Freshwater Reservoirs")))
 sei <- sei |> 
@@ -105,6 +108,8 @@ sei <- sei |>
          comp2lgnd = factor(comp2lgnd, levels = sei_lgnd$complgnd),
          comp3lgnd = factor(comp3lgnd, levels = sei_lgnd$complgnd)
   )
+
+
 
 
 # Base Map ----------------------------------------------------------------

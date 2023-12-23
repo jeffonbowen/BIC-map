@@ -129,11 +129,14 @@ ui <- page_navbar(
 
   
   nav_menu(
-    title = "About",
+    title = "Info",
     align = "right",
     nav_item(
-      "Nothing here yet"
-    )
+      "About"
+      ),
+    nav_item(
+      "Change Log"
+      )
   )
 )
 
